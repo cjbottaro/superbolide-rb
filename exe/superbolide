@@ -5,13 +5,20 @@ require "superbolide/worker"
 require "optparse"
 
 options = {concurrency: 10}
+
 OptionParser.new do |opts|
   opts.banner = "Usage: superbolide [options]"
 
   opts.on("-c", "--concurrency N", Integer, "Specify level of concurrency") do |c|
     options[:concurrency] = c
   end
+
+  opts.on("-r", "--require FILE", String, "Require file") do |r|
+    options[:require] = r
+  end
 end.parse!
+
+require options[:require] if options[:require]
 
 Signal.trap("TERM") do
   Superbolide::Worker.stop()
