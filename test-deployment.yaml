@@ -1,0 +1,59 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sb-worker
+  labels:
+    name: sb-worker
+    app: superbolide
+    role: worker
+    lang: ruby
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: sb-worker
+  template:
+    metadata:
+      labels:
+        name: sb-worker
+        app: superbolide
+        role: worker
+        lang: ruby
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: aw/role
+                operator: In
+                values:
+                  - app
+              - key: aws/lifecycle
+                operator: In
+                values:
+                  - sp
+
+      containers:
+      - name: sb-worker-rb
+        image: 853401350379.dkr.ecr.us-east-1.amazonaws.com/superbolide-worker:latest
+        imagePullPolicy: Always
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+        command:
+          - bundle
+        args:
+          - exec
+          - ruby
+          - exe/superbolide
+        stdin: true
+        stdinOnce: true
+        tty: true
+        env:
+        - name: PROXY_ENDPOINT
+          value: "http://sb-proxy"
+        ports:
+          - containerPort: 8080

@@ -1,0 +1,24 @@
+#!/usr/bin/env ruby
+
+require "superbolide"
+require "superbolide/worker"
+require "optparse"
+
+options = {concurrency: 10}
+OptionParser.new do |opts|
+  opts.banner = "Usage: superbolide [options]"
+
+  opts.on("-c", "--concurrency N", Integer, "Specify level of concurrency") do |c|
+    options[:concurrency] = c
+  end
+end.parse!
+
+Signal.trap("TERM") do
+  Superbolide::Worker.stop()
+end
+
+Signal.trap("INT") do
+  Superbolide::Worker.stop()
+end
+
+Superbolide::Worker.start(options)
