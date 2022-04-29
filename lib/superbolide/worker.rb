@@ -32,6 +32,8 @@ module Superbolide
         class_name = job["type"]
         ack_token = payload["ack_token"]
         job_args = job["args"] || []
+        err_count = job["err_count"]
+        job_args.unshift(err_count)
         args = job_args
           .inspect
           .delete_prefix("[")
