@@ -4,6 +4,8 @@ module Superbolide
   module Worker
     extend(self)
 
+    class RateLimitError < StandardError; end
+
     @shutdown = false
 
     def start(options)
@@ -18,74 +20,105 @@ module Superbolide
     end
 
     private def run_loop
-      uri = URI.parse(ENV["SUPERBOLIDE_URL"])
-      token = uri.password || uri.user
-      http = HTTP.persistent(uri).auth("Bearer #{token}")
+      api_endpoint = Superbolide.configuration[:api_endpoint]
+      api_token = Superbolide.configuration[:api_token]
+
+      uri = URI.parse(api_endpoint)
+      http = HTTP.persistent(uri).auth("Bearer #{api_token}")
 
       while not @shutdown
-        payload = post(http, "/fetch")
-        job = payload["job"]
+        resp = begin
+          http.post("/api/dequeue", json: {queue: "default"})
+        rescue HTTP::ConnectionError
+          puts "HTTP connection error, retrying in 1s"
+          sleep(1)
+          next
+        end
 
-        next unless job
+        if resp.code == 429
+          resp.flush
+          puts "Rate limit exceeded, retrying in 1s"
+          sleep(1)
+          next
+        end
 
-        jid = job["jid"]
+        job = JSON.parse(resp.to_s)
+
+        if job["empty"]
+          next
+        end
+
+        ack_token  = job["ack_token"]
         class_name = job["type"]
-        ack_token = payload["ack_token"]
-        job_args = job["args"] || []
-        err_count = job["err_count"]
-        job_args.unshift(err_count)
-        args = job_args
-          .inspect
-          .delete_prefix("[")
-          .delete_suffix("]")
+        payload    = job["payload"]
 
-        puts "🚀 Start #{jid} #{class_name}(#{args})"
+        args = begin
+          JSON.parse(payload)
+        rescue JSON::ParserError
+          post(http, "/api/nak", json: {
+            ack_token: ack_token,
+            err_type: "InvalidPayloadError",
+            err_msg: "expecting JSON payload"
+          })
+          puts "💥 Nak #{class_name} invalid payload"
+          next
+        end
+
+        puts "🚀 Start #{class_name}(#{format_args(args)})"
         start_time = Time.now
 
         begin
           job_class = Object.const_get(class_name)
-          job_class.new.perform(*job_args)
+          job_class.new.perform(*args)
         rescue Exception => e
           elapsed = (Time.now - start_time).round(3)
 
-          post(http, "/fail", json: {
-            jid: jid,
+          post(http, "/api/nak", json: {
             ack_token: ack_token,
             err_type: e.class.name,
             err_msg: e.message,
             err_trace: e.backtrace.join("\n")
           })
 
-          puts "💥 Nak #{jid} #{class_name}(#{args}) in #{elapsed}s"
+          puts "💥 Nak #{class_name}(#{format_args(args)}) in #{elapsed}s"
         else
           elapsed = (Time.now - start_time).round(3)
 
-          post(http, "/ack", json: {
-            jid: jid,
+          post(http, "/api/ack", json: {
             ack_token: ack_token
           })
 
-          puts "🥂 Ack #{jid} #{class_name}(#{args}) in #{elapsed}s"
+          puts "🥂 Ack #{class_name}(#{format_args(args)}) in #{elapsed}s"
         end
       end
     end
 
+    def format_args(args)
+      case args
+      when String
+        args
+      when Array
+        args.inspect[1..-2]
+      end
+    end
+
     def post(http, *args)
-      resp = begin
-        http.post(*args)
+      begin
+        resp = http.post(*args)
+        if resp.code == 429
+          resp.flush
+          raise RateLimitError
+        end
+        JSON.parse(resp.to_s)
       rescue HTTP::ConnectionError
         puts "HTTP connection error, retrying in 1s"
         sleep(1)
         retry
+      rescue RateLimitError
+        puts "Rate limit exceeded, retrying in 1s"
+        sleep(1)
+        retry
       end
-
-      payload = JSON.parse(resp.to_s)
-
-      if resp.code != 200
-        puts "WARNING #{resp.code} #{payload.inspect}"
-      end
-
-      payload
     end
 
     def stop

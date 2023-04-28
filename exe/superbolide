@@ -4,12 +4,19 @@ require "superbolide"
 require "superbolide/worker"
 require "optparse"
 
-options = {concurrency: 10}
+options = {
+  queue: "default",
+  concurrency: 10
+}
 
 OptionParser.new do |opts|
   opts.banner = "Usage: superbolide [options]"
 
-  opts.on("-c", "--concurrency N", Integer, "Specify level of concurrency") do |c|
+  opts.on("-q", "--queue QUEUE", String, "Specify which queue to use. Default #{options[:queue].inspect}") do |q|
+    options[:queue] = q
+  end
+
+  opts.on("-c", "--concurrency N", Integer, "Specify level of concurrency. Default #{options[:concurrency].inspect}") do |c|
     options[:concurrency] = c
   end
 
@@ -17,6 +24,11 @@ OptionParser.new do |opts|
     options[:require] = r
   end
 end.parse!
+
+if Superbolide.configuration[:api_token] == ""
+  puts "SUPERBOLIDE_API_TOKEN is not set, exiting"
+  exit 1
+end
 
 require options[:require] if options[:require]
 

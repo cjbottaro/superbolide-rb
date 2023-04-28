@@ -8,14 +8,19 @@ module Superbolide
       end
 
       def perform_async(*args)
-        options = @superbolide_options.merge(args: args)
-        Superbolide.push(self, options)
+        job = {
+          queue: @superbolide_options[:queue],
+          payload: JSON.dump(args),
+          type: self.to_s
+        }
+
+        Superbolide.enqueue(job)
       end
 
     end
 
     def self.included(mod)
-      mod.instance_eval{ @superbolide_options = {} }
+      mod.instance_eval{ @superbolide_options = {queue: "default"} }
       mod.extend(ClassMethods)
     end
 
