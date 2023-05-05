@@ -29,12 +29,24 @@ module Superbolide
   end
 
   def enqueue(job)
-    connection_pool.with do |http|
-      resp = http.post("/api/enqueue", json: job)
-      payload = JSON.parse(resp.to_s)
-      raise payload["error"] if resp.code != 200
-      payload
+    resp = enqueue_request(job)
+    while resp.code == 429
+      resp = enqueue_request(job)
     end
+
+    JSON.parse(resp.to_s).tap do |payload|
+      raise payload["error"] if resp.code != 200
+    end
+  end
+
+  private enqueue_request(job) do
+    connection_pool.with do |http|
+      http.post("/api/enqueue", json: job)
+    end
+  rescue HTTP::ConnectionError
+    puts "HTTP connection error, retrying in 1s"
+    sleep(1)
+    retry
   end
 
 end
