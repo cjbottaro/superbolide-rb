@@ -39,7 +39,7 @@ module Superbolide
     end
   end
 
-  private enqueue_request(job)
+  private def enqueue_request(job)
     connection_pool.with do |http|
       http.post("/api/enqueue", json: job)
     end
