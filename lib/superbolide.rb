@@ -18,8 +18,7 @@ module Superbolide
   def configuration
     @configuration ||= begin
       api_token = (ENV["SUPERBOLIDE_API_TOKEN"] || "").strip
-      api_endpoint = (ENV["SUPERBOLIDE_ENDPOINT"] || "").strip
-      api_endpoint ||= "https://superbolide.io"
+      api_endpoint = (ENV["SUPERBOLIDE_ENDPOINT"] || "https://superbolide.io").strip
 
       {
         api_token: api_token,
