@@ -7,45 +7,32 @@ require "superbolide/job"
 module Superbolide
   extend self
 
-  attr_reader :connection_pool
+  class InvalidPayloadError < StandardError; end
 
-  @connection_pool = ConnectionPool.new(size: 5, timeout: 5) do
-    uri = URI.parse(configuration[:api_endpoint])
-    token = configuration[:api_token]
-    HTTP.persistent(uri).auth("Bearer #{token}")
-  end
+  attr_reader :config, :connection_pool
 
-  def configuration
-    @configuration ||= begin
-      api_token = (ENV["SUPERBOLIDE_API_TOKEN"] || "").strip
-      api_endpoint = (ENV["SUPERBOLIDE_ENDPOINT"] || "https://superbolide.io").strip
+  CONFIG_OPTIONS = [:api_token, :api_endpoint, :queue, :concurrency, :pool_size, :pool_timeout]
 
-      {
-        api_token: api_token,
-        api_endpoint: api_endpoint
-      }
+  @config = Struct.new(*CONFIG_OPTIONS).new
+
+  def configure(&block)
+    new_config = @config.dup
+    block.call(new_config)
+    @config = new_config.freeze
+
+    @connection_pool = ConnectionPool.new(size: config.pool_size, timeout: config.pool_timeout) do
+      uri = URI.parse(config.api_endpoint)
+      HTTP.persistent(uri).auth("Bearer #{config.api_token}")
     end
   end
 
-  def enqueue(job)
-    resp = enqueue_request(job)
-    while resp.code == 429
-      resp = enqueue_request(job)
-    end
-
-    JSON.parse(resp.to_s).tap do |payload|
-      raise payload["error"] if resp.code != 200
-    end
-  end
-
-  private def enqueue_request(job)
-    connection_pool.with do |http|
-      http.post("/api/enqueue", json: job)
-    end
-  rescue HTTP::ConnectionError
-    puts "HTTP connection error, retrying in 1s"
-    sleep(1)
-    retry
+  configure do |c|
+    c.api_token = (ENV["SUPERBOLIDE_API_TOKEN"] || "").strip
+    c.api_endpoint = (ENV["SUPERBOLIDE_ENDPOINT"] || "https://superbolide.io").strip
+    c.queue = "default"
+    c.concurrency = 10
+    c.pool_size = c.concurrency + 5
+    c.pool_timeout = 1
   end
 
 end

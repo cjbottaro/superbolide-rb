@@ -4,33 +4,29 @@ require "superbolide"
 require "superbolide/worker"
 require "optparse"
 
-options = {
-  queue: "default",
-  concurrency: 10
-}
-
 OptionParser.new do |opts|
   opts.banner = "Usage: superbolide [options]"
 
-  opts.on("-q", "--queue QUEUE", String, "Specify which queue to use. Default #{options[:queue].inspect}") do |q|
-    options[:queue] = q
+  opts.on("-q", "--queue QUEUE", String, "Specify which queue to use. Default #{Superbolide.config.queue.inspect}") do |q|
+    Superbolide.configure{ |config| config.queue = q }
   end
 
-  opts.on("-c", "--concurrency N", Integer, "Specify level of concurrency. Default #{options[:concurrency].inspect}") do |c|
-    options[:concurrency] = c
+  opts.on("-c", "--concurrency N", Integer, "Specify level of concurrency. Default #{Superbolide.config.concurrency.inspect}") do |c|
+    Superbolide.configure do |config|
+      config.concurrency = c
+      config.pool_size = c + 5
+    end
   end
 
   opts.on("-r", "--require FILE", String, "Require file") do |r|
-    options[:require] = r
+    require r
   end
 end.parse!
 
-if Superbolide.configuration[:api_token] == ""
+if Superbolide.config.api_token == ""
   puts "SUPERBOLIDE_API_TOKEN is not set, exiting"
   exit 1
 end
-
-require options[:require] if options[:require]
 
 Signal.trap("TERM") do
   Superbolide::Worker.stop()
@@ -40,4 +36,4 @@ Signal.trap("INT") do
   Superbolide::Worker.stop()
 end
 
-Superbolide::Worker.start(options)
+Superbolide::Worker.start

@@ -1,3 +1,5 @@
+require "superbolide/api"
+
 module Superbolide
   module Job
 
@@ -8,13 +10,11 @@ module Superbolide
       end
 
       def perform_async(*args)
-        job = {
-          queue: @superbolide_options[:queue],
-          payload: JSON.dump(args),
-          type: self.to_s
-        }
-
-        Superbolide.enqueue(job)
+        Superbolide::Api.enqueue(
+          @superbolide_options[:queue],
+          self.to_s,
+          JSON.dump(args)
+        )
       end
 
     end
