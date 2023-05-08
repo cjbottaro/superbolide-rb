@@ -38,7 +38,7 @@ module Superbolide
       end
 
       JSON.parse(resp.to_s).tap do |payload|
-        raise payload["error"] if resp.code != 200
+        raise RuntimeError, "#{resp.code} - #{resp.to_s}" if resp.code != 200
       end
     end
 
