@@ -12,8 +12,15 @@ module Superbolide
         Thread.new { run_loop }
       end
 
+      while not @shutdown
+        sleep 1
+        worker_threads.each do |thread|
+          thread.join unless thread.alive?
+        end
+      end
+
       worker_threads.each(&:join)
-      puts "Graceful shutdown successful, bye!"
+      puts "Graceful shutdown successful. Goodbye."
     end
 
     private def run_loop

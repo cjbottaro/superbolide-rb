@@ -33,7 +33,6 @@ module Superbolide
       resp = do_post(path, json)
       while resp.code == 429
         puts "Superbolide rate limit hit, retrying now"
-        resp.flush
         resp = do_post(path, json)
       end
 
@@ -44,7 +43,7 @@ module Superbolide
 
     private def do_post(path, json)
       Superbolide.connection_pool.with do |http|
-        http.post(path, json: json)
+        http.post(path, json: json).tap(&:to_s)
       end
     rescue HTTP::ConnectionError
       puts "Superbolide connection error, retrying in 1s"
